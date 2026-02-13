@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TTS alignment tester</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      line-height: 1.5;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 0.25rem;
+      color: #fff;
+    }
+
+    .sub {
+      color: #6a6a6a;
+      font-size: 0.75rem;
+      margin-bottom: 2rem;
+      max-width: 600px;
+      line-height: 1.6;
+    }
+
+    section {
+      background: #0a0a0a;
+      border: 1px solid #2b2b2b;
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    section h2 {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      margin: 0 0 1rem 0;
+      color: #808080;
+      border-bottom: 1px solid #222;
+      padding-bottom: 0.5rem;
+    }
+
+    label {
+      display: block;
+      margin-top: 0.75rem;
+      color: #555;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    input[type="text"], input[type="password"], input[type="number"], textarea {
+      width: 100%;
+      padding: 0.55rem 0.6rem;
+      background: #111;
+      border: 1px solid #2b2b2b;
+      color: #eee;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus, textarea:focus {
+      border-color: #555;
+    }
+
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    button {
+      padding: 0.5rem 1.2rem;
+      background: #111;
+      border: 1px solid #404040;
+      color: #c0c0c0;
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 0.5rem;
+      transition: all 0.1s;
+    }
+
+    button:hover {
+      background: #1a1a1a;
+      border-color: #6a6a6a;
+      color: #fff;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button.primary {
+      background: #fff;
+      color: #000;
+      border-color: #fff;
+      font-weight: 700;
+    }
+
+    button.primary:hover {
+      background: #ddd;
+      border-color: #ddd;
+    }
+
+    button.primary:disabled {
+      background: #333;
+      color: #808080;
+      border-color: #404040;
+      cursor: not-allowed;
+    }
+
+    .row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .row > * { flex: 1; min-width: 120px; }
+
+    .error {
+      color: #e53;
+      font-size: 0.75rem;
+      margin-top: 0.75rem;
+      padding: 0.5rem;
+      border-left: 2px solid #e53;
+      background: #1a0a0a;
+    }
+
+    .hidden { display: none; }
+
+    audio {
+      width: 100%;
+      margin: 0.5rem 0;
+      filter: grayscale(1) brightness(0.8);
+    }
+
+    .goto {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin: 0.75rem 0;
+    }
+
+    .goto input { width: 80px; }
+    .goto label { margin: 0; }
+
+    .words {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.75rem;
+    }
+
+    .word {
+      padding: 0.2rem 0.45rem;
+      background: #111;
+      border: 1px solid #2b2b2b;
+      cursor: pointer;
+      font-size: 0.78rem;
+      transition: all 0.1s;
+    }
+
+    .word:hover {
+      background: #1a1a1a;
+      border-color: #6a6a6a;
+      color: #fff;
+    }
+
+    .word .time {
+      color: #404040;
+      font-size: 0.6rem;
+      margin-left: 0.3rem;
+    }
+
+    .word:hover .time { color: #6a6a6a; }
+
+    .words-label {
+      color: #404040;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-top: 0.75rem;
+    }
+
+    /* API key field with eye toggle */
+    .api-key-wrap {
+      position: relative;
+    }
+
+    .api-key-wrap input {
+      padding-right: 2.5rem;
+    }
+
+    .eye-toggle {
+      position: absolute;
+      right: 0.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #555;
+      cursor: pointer;
+      padding: 0.2rem;
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .eye-toggle:hover {
+      color: #aaa;
+      background: none;
+      border: none;
+    }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #404040;
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.4rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Text area with shuffle button */
+    .text-wrap {
+      position: relative;
+    }
+
+    .text-wrap textarea {
+      padding-right: 2.5rem;
+    }
+
+    .shuffle-btn {
+      position: absolute;
+      right: 0.5rem;
+      top: 0.5rem;
+      background: none;
+      border: 1px solid #2b2b2b;
+      color: #555;
+      cursor: pointer;
+      padding: 0.25rem 0.35rem;
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .shuffle-btn:hover {
+      color: #c0c0c0;
+      border-color: #555;
+      background: #151515;
+    }
+
+    /* Separator */
+    hr {
+      border: none;
+      border-top: 1px solid #222;
+      margin: 0.5rem 0 1rem 0;
+    }
+
+    code {
+      background: #151515;
+      padding: 0.1rem 0.35rem;
+      font-size: 0.78rem;
+      border: 1px solid #2b2b2b;
+    }
+  </style>
+</head>
+<body>
+  <h1>ElevenLabs TTS Alignment Tester</h1>
+  <p class="sub">Generate speech with timestamps or load existing alignment data. Click words to seek. Troubleshoot model-level alignment quirks.</p>
+
+  <section>
+    <h2>Generate</h2>
+    <label>Text</label>
+    <div class="text-wrap">
+      <textarea id="text" placeholder="Enter text to synthesize...">Once you have enjoyed a small portion of your windfall, it is time to think strategically about how to make the most of your newfound wealth and support your long-term financial health.</textarea>
+      <button type="button" class="shuffle-btn" id="btnShuffle" title="Random preset text">&#x21BB;</button>
+    </div>
+    <div class="row">
+      <div>
+        <label>Voice ID</label>
+        <input type="text" id="voice_id" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM">
+      </div>
+      <div>
+        <label>API key</label>
+        <div class="api-key-wrap">
+          <input type="password" id="api_key" placeholder="xi-api-key">
+          <button type="button" class="eye-toggle" id="btnEye" title="Toggle visibility">&#9673;</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>API base (optional)</label>
+        <input type="text" id="api_base" placeholder="https://api.elevenlabs.io" value="https://api.elevenlabs.io">
+      </div>
+      <div>
+        <label>Model ID (optional)</label>
+        <input type="text" id="model_id" placeholder="eleven_multilingual_v2">
+      </div>
+      <div>
+        <label>Output format (optional)</label>
+        <input type="text" id="output_format" placeholder="mp3_44100_128">
+      </div>
+    </div>
+    <button type="button" class="primary" id="btnGenerate">Generate</button>
+    <div id="genError" class="error hidden"></div>
+  </section>
+
+  <section>
+    <h2>Load existing</h2>
+    <p class="sub" style="margin-bottom:0.75rem">Paste JSON with <code>audio_base64</code> and <code>alignment</code> (characters, character_start_times_seconds, character_end_times_seconds — or _ms).</p>
+    <textarea id="pasteJson" placeholder='{"audio_base64": "...", "alignment": { "characters": [...], "character_start_times_seconds": [...], "character_end_times_seconds": [...] }}'></textarea>
+    <button type="button" id="btnLoad">Load</button>
+    <div id="loadError" class="error hidden"></div>
+  </section>
+
+  <section id="playbackSection" class="hidden">
+    <h2>Playback</h2>
+    <audio id="audio" controls></audio>
+    <div class="goto">
+      <label>Go to (s)</label>
+      <input type="number" id="goTime" step="0.1" min="0" placeholder="0">
+      <button type="button" id="btnGo">Go</button>
+    </div>
+    <div class="words-label">Words — click to seek</div>
+    <div id="words" class="words"></div>
+  </section>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'tts_alignment_api_key';
+      const audio = document.getElementById('audio');
+      const playbackSection = document.getElementById('playbackSection');
+      const wordsEl = document.getElementById('words');
+      const goTimeInput = document.getElementById('goTime');
+      const apiKeyInput = document.getElementById('api_key');
+      const btnGenerate = document.getElementById('btnGenerate');
+      let words = [];
+
+      const TEXT_PRESETS = [
+        "Once you have enjoyed a small portion of your windfall, it is time to think strategically about how to make the most of your newfound wealth and support your long-term financial health.",
+
+        "And here, deep in the undergrowth of the Borneo rainforest, we find a most extraordinary creature. The pygmy elephant, barely eight feet tall, moves through the dappled light with a grace that belies its enormous frame. It has traveled forty miles today in search of the salt lick its ancestors have visited for a thousand generations.",
+
+        "Do not go gentle into that good night. Old age should burn and rave at close of day. Rage, rage against the dying of the light. Though wise men at their end know dark is right, because their words had forked no lightning they do not go gentle into that good night.",
+
+        "She sells seashells by the seashore. The shells she sells are seashells, I'm sure. So if she sells seashells on the seashore, then I'm sure she sells seashore shells. How can a clam cram in a clean cream can? Six slippery snails slid slowly seaward.",
+
+        "Space: the final frontier. These are the voyages of the starship Enterprise. Its continuing mission: to explore strange new worlds, to seek out new life and new civilizations, to boldly go where no one has gone before.",
+
+        "The fog had rolled in from the harbor like a slow exhale, swallowing the streetlamps one by one. Detective Marsh pulled her collar up and stepped over the threshold. The room smelled of cold coffee and regret. On the desk, a single photograph lay face-down, its edges curled with age."
+      ];
+
+      // Restore API key from localStorage
+      const savedKey = localStorage.getItem(STORAGE_KEY);
+      if (savedKey) apiKeyInput.value = savedKey;
+
+      // Persist API key on change
+      apiKeyInput.addEventListener('input', function () {
+        localStorage.setItem(STORAGE_KEY, apiKeyInput.value);
+      });
+
+      // Eye toggle
+      document.getElementById('btnEye').addEventListener('click', function () {
+        const isPassword = apiKeyInput.type === 'password';
+        apiKeyInput.type = isPassword ? 'text' : 'password';
+        this.innerHTML = isPassword ? '&#9678;' : '&#9673;';
+      });
+
+      // Shuffle text presets
+      let lastPresetIndex = -1;
+      document.getElementById('btnShuffle').addEventListener('click', function () {
+        let idx;
+        do {
+          idx = Math.floor(Math.random() * TEXT_PRESETS.length);
+        } while (idx === lastPresetIndex && TEXT_PRESETS.length > 1);
+        lastPresetIndex = idx;
+        document.getElementById('text').value = TEXT_PRESETS[idx];
+      });
+
+      function normalizeAlignment(alignment) {
+        if (!alignment || !alignment.characters || !alignment.characters.length) return null;
+        const chars = alignment.characters;
+        let starts = alignment.character_start_times_seconds ?? alignment.character_start_times_ms;
+        let ends = alignment.character_end_times_seconds ?? alignment.character_end_times_ms;
+        if (!starts || !ends || starts.length !== chars.length || ends.length !== chars.length) return null;
+        const inSeconds = alignment.character_start_times_seconds != null;
+        if (!inSeconds) {
+          starts = starts.map((t) => t / 1000);
+          ends = ends.map((t) => t / 1000);
+        }
+        return { chars, starts, ends };
+      }
+
+      function buildWords(norm) {
+        const out = [];
+        let i = 0;
+        while (i < norm.chars.length) {
+          if (/\s/.test(norm.chars[i])) { i++; continue; }
+          const start = norm.starts[i];
+          let end = norm.ends[i];
+          const buf = [norm.chars[i]];
+          i++;
+          while (i < norm.chars.length && !/\s/.test(norm.chars[i])) {
+            buf.push(norm.chars[i]);
+            end = norm.ends[i];
+            i++;
+          }
+          out.push({ text: buf.join(''), start, end });
+        }
+        return out;
+      }
+
+      function clearResult() {
+        playbackSection.classList.add('hidden');
+        audio.removeAttribute('src');
+        audio.load();
+        wordsEl.innerHTML = '';
+        words = [];
+      }
+
+      function setResult(audioBase64, alignment) {
+        const norm = normalizeAlignment(alignment);
+        if (!norm) { return; }
+        words = buildWords(norm);
+        audio.src = 'data:audio/mpeg;base64,' + audioBase64;
+        playbackSection.classList.remove('hidden');
+        wordsEl.innerHTML = '';
+        words.forEach(function (w) {
+          const span = document.createElement('span');
+          span.className = 'word';
+          span.title = w.start.toFixed(2) + 's \u2013 ' + w.end.toFixed(2) + 's';
+          span.innerHTML = w.text + '<span class="time">' + w.start.toFixed(2) + 's</span>';
+          span.addEventListener('click', function () {
+            audio.currentTime = w.start;
+            audio.play();
+          });
+          wordsEl.appendChild(span);
+        });
+      }
+
+      function setGenerating(busy) {
+        btnGenerate.disabled = busy;
+        btnGenerate.innerHTML = busy
+          ? '<span class="spinner"></span>Generating\u2026'
+          : 'Generate';
+      }
+
+      document.getElementById('btnGenerate').addEventListener('click', async function () {
+        const text = document.getElementById('text').value.trim();
+        const voice_id = document.getElementById('voice_id').value.trim();
+        const api_key = apiKeyInput.value.trim();
+        const api_base = document.getElementById('api_base').value.trim() || 'https://api.elevenlabs.io';
+        const model_id = document.getElementById('model_id').value.trim() || undefined;
+        const output_format = document.getElementById('output_format').value.trim() || undefined;
+        const errEl = document.getElementById('genError');
+        errEl.classList.add('hidden');
+
+        if (!text || !voice_id || !api_key) {
+          errEl.textContent = 'Fill text, voice ID, and API key.';
+          errEl.classList.remove('hidden');
+          return;
+        }
+
+        clearResult();
+        setGenerating(true);
+
+        try {
+          let url = `${api_base}/v1/text-to-speech/${encodeURIComponent(voice_id)}/with-timestamps`;
+          if (output_format) {
+            url += `?output_format=${encodeURIComponent(output_format)}`;
+          }
+          const payload = { text };
+          if (model_id) payload.model_id = model_id;
+
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'xi-api-key': api_key,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            const detail = data?.detail;
+            const msg = typeof detail === 'object' ? (detail.message || JSON.stringify(detail)) : (detail || data.error || res.statusText);
+            errEl.textContent = msg;
+            errEl.classList.remove('hidden');
+            return;
+          }
+          const alignment = data.alignment || data.normalized_alignment;
+          const audioBase64 = data.audio_base_64 ?? data.audio_base64;
+          if (!audioBase64 || !alignment) {
+            errEl.textContent = 'Response missing audio_base64 or alignment.';
+            errEl.classList.remove('hidden');
+            return;
+          }
+          setResult(audioBase64, alignment);
+        } catch (e) {
+          errEl.textContent = e.message || String(e);
+          errEl.classList.remove('hidden');
+        } finally {
+          setGenerating(false);
+        }
+      });
+
+      document.getElementById('btnLoad').addEventListener('click', function () {
+        const raw = document.getElementById('pasteJson').value.trim();
+        const errEl = document.getElementById('loadError');
+        errEl.classList.add('hidden');
+        if (!raw) return;
+        try {
+          const data = JSON.parse(raw);
+          const alignment = data.alignment || data.normalized_alignment;
+          const audioBase64 = data.audio_base_64 ?? data.audio_base64;
+          if (!audioBase64 || !alignment) {
+            errEl.textContent = 'JSON must include audio_base64 and alignment.';
+            errEl.classList.remove('hidden');
+            return;
+          }
+          setResult(audioBase64, alignment);
+        } catch (e) {
+          errEl.textContent = e.message || 'Invalid JSON';
+          errEl.classList.remove('hidden');
+        }
+      });
+
+      document.getElementById('btnGo').addEventListener('click', function () {
+        const t = parseFloat(goTimeInput.value, 10);
+        if (!Number.isFinite(t) || t < 0) return;
+        audio.currentTime = t;
+        audio.play();
+      });
+
+      goTimeInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') document.getElementById('btnGo').click();
+      });
+    })();
+  </script>
+</body>
+</html>
