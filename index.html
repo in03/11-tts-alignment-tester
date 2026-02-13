@@ -147,10 +147,69 @@
 
     .hidden { display: none; }
 
-    audio {
-      width: 100%;
-      margin: 0.5rem 0;
-      filter: grayscale(1) brightness(0.8);
+    /* Custom audio player */
+    .player {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 0;
+      margin: 0.25rem 0 0.5rem 0;
+    }
+
+    .player-btn {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+      border: 1px solid #404040;
+      color: #c0c0c0;
+      font-size: 0.85rem;
+      line-height: 1;
+      text-transform: none;
+      letter-spacing: 0;
+      flex-shrink: 0;
+    }
+
+    .player-btn:hover {
+      border-color: #6a6a6a;
+      color: #fff;
+    }
+
+    .player-track {
+      flex: 1;
+      height: 4px;
+      background: #1a1a1a;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .player-track:hover {
+      height: 6px;
+    }
+
+    .player-fill {
+      height: 100%;
+      background: #555;
+      width: 0%;
+      pointer-events: none;
+      transition: width 0.05s linear;
+    }
+
+    .player-track:hover .player-fill {
+      background: #888;
+    }
+
+    .player-time {
+      font-size: 0.65rem;
+      color: #555;
+      flex-shrink: 0;
+      min-width: 6.5em;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
 
     .goto {
@@ -340,7 +399,7 @@
 
   <section>
     <h2>Load existing</h2>
-    <p class="sub" style="margin-bottom:0.75rem">Paste JSON with <code>audio_base64</code> and <code>alignment</code> (characters, character_start_times_seconds, character_end_times_seconds — or _ms).</p>
+    <p class="sub" style="margin-bottom:0.75rem">Paste JSON or JSONL (multi-line streaming chunks) with <code>audio_base64</code> and <code>alignment</code>. Audio chunks are concatenated automatically; sample rate is inferred from alignment timing.</p>
     <textarea id="pasteJson" placeholder='{"audio_base64": "...", "alignment": { "characters": [...], "character_start_times_seconds": [...], "character_end_times_seconds": [...] }}'></textarea>
     <button type="button" id="btnLoad">Load</button>
     <div id="loadError" class="error hidden"></div>
@@ -348,7 +407,14 @@
 
   <section id="playbackSection" class="hidden">
     <h2>Playback</h2>
-    <audio id="audio" controls></audio>
+    <audio id="audio" style="display:none"></audio>
+    <div class="player">
+      <button type="button" class="player-btn" id="btnPlay" title="Play / Pause">&#9654;</button>
+      <div class="player-track" id="playerTrack">
+        <div class="player-fill" id="playerFill"></div>
+      </div>
+      <div class="player-time" id="playerTime">0:00 / 0:00</div>
+    </div>
     <div class="goto">
       <label>Go to (s)</label>
       <input type="number" id="goTime" step="0.1" min="0" placeholder="0">
@@ -367,7 +433,49 @@
       const goTimeInput = document.getElementById('goTime');
       const apiKeyInput = document.getElementById('api_key');
       const btnGenerate = document.getElementById('btnGenerate');
+      const btnPlay = document.getElementById('btnPlay');
+      const playerTrack = document.getElementById('playerTrack');
+      const playerFill = document.getElementById('playerFill');
+      const playerTime = document.getElementById('playerTime');
       let words = [];
+
+      function fmtTime(s) {
+        if (!Number.isFinite(s) || s < 0) s = 0;
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return m + ':' + String(sec).padStart(2, '0');
+      }
+
+      function updatePlayer() {
+        const cur = audio.currentTime || 0;
+        const dur = audio.duration || 0;
+        const pct = dur > 0 ? (cur / dur) * 100 : 0;
+        playerFill.style.width = pct + '%';
+        playerTime.textContent = fmtTime(cur) + ' / ' + fmtTime(dur);
+      }
+
+      audio.addEventListener('timeupdate', updatePlayer);
+      audio.addEventListener('loadedmetadata', updatePlayer);
+      audio.addEventListener('durationchange', updatePlayer);
+
+      audio.addEventListener('play', function () { btnPlay.innerHTML = '&#9646;&#9646;'; });
+      audio.addEventListener('pause', function () { btnPlay.innerHTML = '&#9654;'; });
+      audio.addEventListener('ended', function () { btnPlay.innerHTML = '&#9654;'; });
+
+      btnPlay.addEventListener('click', function () {
+        if (audio.paused) { audio.play(); } else { audio.pause(); }
+      });
+
+      playerTrack.addEventListener('click', function (e) {
+        const dur = audio.duration;
+        if (!dur) return;
+        const rect = playerTrack.getBoundingClientRect();
+        const pct = (e.clientX - rect.left) / rect.width;
+        audio.currentTime = pct * dur;
+        audio.play();
+      });
+
+      const STANDARD_RATES = [8000, 11025, 16000, 22050, 24000, 44100, 48000];
 
       const TEXT_PRESETS = [
         "Once you have enjoyed a small portion of your windfall, it is time to think strategically about how to make the most of your newfound wealth and support your long-term financial health.",
@@ -449,13 +557,149 @@
         audio.load();
         wordsEl.innerHTML = '';
         words = [];
+        playerFill.style.width = '0%';
+        playerTime.textContent = '0:00 / 0:00';
+        btnPlay.innerHTML = '&#9654;';
       }
 
-      function setResult(audioBase64, alignment) {
+      /** Detect format from first bytes of decoded audio */
+      function detectAudioFormat(bytes) {
+        if (bytes.length < 4) return 'unknown';
+        if (String.fromCharCode(bytes[0], bytes[1], bytes[2]) === 'ID3') return 'mp3';
+        if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) return 'mp3';
+        if (String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) === 'RIFF') return 'wav';
+        if (String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) === 'OggS') return 'ogg';
+        if (String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) === 'fLaC') return 'flac';
+        return 'pcm';
+      }
+
+      /** Given alignment end time and total PCM byte count, infer sample rate */
+      function inferSampleRate(totalBytes, alignment) {
         const norm = normalizeAlignment(alignment);
-        if (!norm) { return; }
-        words = buildWords(norm);
-        audio.src = 'data:audio/mpeg;base64,' + audioBase64;
+        if (!norm || norm.ends.length === 0) return 44100;
+        const maxEnd = norm.ends[norm.ends.length - 1];
+        if (maxEnd <= 0) return 44100;
+        const samples = totalBytes / 2; // S16LE mono
+        const rawRate = samples / maxEnd;
+        // Snap to nearest standard rate
+        let best = STANDARD_RATES[0];
+        let bestDist = Math.abs(rawRate - best);
+        for (const sr of STANDARD_RATES) {
+          const dist = Math.abs(rawRate - sr);
+          if (dist < bestDist) { best = sr; bestDist = dist; }
+        }
+        return best;
+      }
+
+      /** Concatenate multiple Uint8Arrays */
+      function concatBytes(arrays) {
+        const total = arrays.reduce((n, a) => n + a.length, 0);
+        const result = new Uint8Array(total);
+        let offset = 0;
+        for (const a of arrays) { result.set(a, offset); offset += a.length; }
+        return result;
+      }
+
+      /** Build a WAV data URL from raw PCM bytes (S16LE mono) */
+      function pcmToWavDataUrl(pcmBytes, sampleRate) {
+        const numChannels = 1;
+        const bitsPerSample = 16;
+        const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+        const headerSize = 44;
+        const buf = new ArrayBuffer(headerSize + pcmBytes.length);
+        const view = new DataView(buf);
+        const w = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+        w(0, 'RIFF');
+        view.setUint32(4, 36 + pcmBytes.length, true);
+        w(8, 'WAVE');
+        w(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, numChannels * (bitsPerSample / 8), true);
+        view.setUint16(34, bitsPerSample, true);
+        w(36, 'data');
+        view.setUint32(40, pcmBytes.length, true);
+        new Uint8Array(buf, headerSize).set(pcmBytes);
+        // Convert to base64 in chunks to avoid call stack overflow
+        const full = new Uint8Array(buf);
+        let b64 = '';
+        for (let i = 0; i < full.length; i += 8192) {
+          b64 += String.fromCharCode.apply(null, full.subarray(i, i + 8192));
+        }
+        return 'data:audio/wav;base64,' + btoa(b64);
+      }
+
+      /** Build a data URL from decoded audio bytes, wrapping PCM in WAV if needed */
+      function audioToDataUrl(audioBytes, sampleRate) {
+        const fmt = detectAudioFormat(audioBytes);
+        if (fmt === 'mp3') {
+          let b64 = '';
+          for (let i = 0; i < audioBytes.length; i += 8192) {
+            b64 += String.fromCharCode.apply(null, audioBytes.subarray(i, i + 8192));
+          }
+          return 'data:audio/mpeg;base64,' + btoa(b64);
+        }
+        if (fmt === 'wav') {
+          let b64 = '';
+          for (let i = 0; i < audioBytes.length; i += 8192) {
+            b64 += String.fromCharCode.apply(null, audioBytes.subarray(i, i + 8192));
+          }
+          return 'data:audio/wav;base64,' + btoa(b64);
+        }
+        if (fmt === 'ogg') {
+          let b64 = '';
+          for (let i = 0; i < audioBytes.length; i += 8192) {
+            b64 += String.fromCharCode.apply(null, audioBytes.subarray(i, i + 8192));
+          }
+          return 'data:audio/ogg;base64,' + btoa(b64);
+        }
+        return pcmToWavDataUrl(audioBytes, sampleRate);
+      }
+
+      /**
+       * Parse JSON or JSONL input.
+       * Returns { audioBytes: Uint8Array, alignment: object }
+       * For JSONL: concatenates audio from all lines, merges alignment from first line that has it.
+       */
+      function parseInput(raw) {
+        const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+        const audioChunks = [];
+        let alignment = null;
+
+        for (const line of lines) {
+          const d = JSON.parse(line);
+          const b64 = d.audio_base_64 ?? d.audio_base64;
+          if (b64) {
+            const binStr = atob(b64);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+            audioChunks.push(bytes);
+          }
+          if (!alignment) {
+            const a = d.alignment || d.normalized_alignment;
+            if (a && a.characters && a.characters.length > 0) alignment = a;
+          }
+        }
+
+        if (audioChunks.length === 0) throw new Error('No audio_base64 found in input.');
+        const audioBytes = concatBytes(audioChunks);
+        return { audioBytes, alignment: alignment || { characters: [], character_start_times_seconds: [], character_end_times_seconds: [] } };
+      }
+
+      function showResult(audioBytes, alignment, sampleRateHint) {
+        const norm = normalizeAlignment(alignment);
+        words = norm ? buildWords(norm) : [];
+
+        const fmt = detectAudioFormat(audioBytes);
+        let sampleRate = sampleRateHint || 44100;
+        if (fmt === 'pcm') {
+          sampleRate = inferSampleRate(audioBytes.length, alignment);
+        }
+
+        audio.src = audioToDataUrl(audioBytes, sampleRate);
         playbackSection.classList.remove('hidden');
         wordsEl.innerHTML = '';
         words.forEach(function (w) {
@@ -528,7 +772,16 @@
             errEl.classList.remove('hidden');
             return;
           }
-          setResult(audioBase64, alignment);
+          const binStr = atob(audioBase64);
+          const audioBytes = new Uint8Array(binStr.length);
+          for (let i = 0; i < binStr.length; i++) audioBytes[i] = binStr.charCodeAt(i);
+
+          // Parse sample rate from output_format if specified (e.g. "pcm_44100")
+          let srHint = null;
+          const m = (output_format || '').match(/(?:pcm|ulaw|alaw|wav)_(\d+)/i);
+          if (m) srHint = parseInt(m[1], 10);
+
+          showResult(audioBytes, alignment, srHint);
         } catch (e) {
           errEl.textContent = e.message || String(e);
           errEl.classList.remove('hidden');
@@ -543,15 +796,8 @@
         errEl.classList.add('hidden');
         if (!raw) return;
         try {
-          const data = JSON.parse(raw);
-          const alignment = data.alignment || data.normalized_alignment;
-          const audioBase64 = data.audio_base_64 ?? data.audio_base64;
-          if (!audioBase64 || !alignment) {
-            errEl.textContent = 'JSON must include audio_base64 and alignment.';
-            errEl.classList.remove('hidden');
-            return;
-          }
-          setResult(audioBase64, alignment);
+          const { audioBytes, alignment } = parseInput(raw);
+          showResult(audioBytes, alignment, null);
         } catch (e) {
           errEl.textContent = e.message || 'Invalid JSON';
           errEl.classList.remove('hidden');
