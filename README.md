@@ -4,13 +4,7 @@ Simple tool to generate TTS with timestamps, play the audio, and verify alignmen
 
 ## Run
 
-From the `issue_reproduction` repo root:
-
-```bash
-uv run tts_alignment_test/server.py
-```
-
-Then open http://localhost:8766
+All client-side JS. Just open `index.html` in a browser and it will work. Deploy as you like.
 
 ## Use
 
